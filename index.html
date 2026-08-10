@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arb-bot · live trading system</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --axis:      #c3c2b7;
+    --ring:      rgba(11,11,11,0.10);
+    --pos:       #2a78d6;
+    --pos-fill:  rgba(42,120,214,0.14);
+    --neg:       #e34948;
+    --live:      #0ca30c;
+    --mark:      #eda100;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --axis:      #383835;
+      --ring:      rgba(255,255,255,0.10);
+      --pos:       #3987e5;
+      --pos-fill:  rgba(57,135,229,0.18);
+      --neg:       #e66767;
+      --live:      #0ca30c;
+      --mark:      #c98500;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --axis:      #383835;
+    --ring:      rgba(255,255,255,0.10);
+    --pos:       #3987e5;
+    --pos-fill:  rgba(57,135,229,0.18);
+    --neg:       #e66767;
+    --live:      #0ca30c;
+    --mark:      #c98500;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 40px 20px 56px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; }
+  h1 { font-size: 22px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--live);
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+  .updated { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .sub { color: var(--ink-2); font-size: 13.5px; margin: 8px 0 24px; max-width: 72ch; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 12px 14px 11px; }
+  .tile .label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  .tile .value { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  .tile .value.pos { color: var(--pos); }
+  .tile .value small { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 14px 14px 8px; margin-bottom: 14px; }
+  .card h2 { font-size: 12px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 10px; }
+  .card h2 .lg { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--muted); margin-left: 8px; }
+  .chartbox { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .tip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 6px;
+    padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    white-space: nowrap; z-index: 2; max-width: 300px;
+  }
+  .tip .d { color: var(--muted); font-size: 11px; }
+  .tip .v { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tip .m { color: var(--ink-2); font-size: 11.5px; white-space: normal; }
+
+  .milestones { margin: 4px 0 0; padding: 0 2px 8px; }
+  .milestones li {
+    list-style: none; display: flex; gap: 10px; align-items: baseline;
+    padding: 3.5px 0; font-size: 12.5px; color: var(--ink-2);
+  }
+  .milestones .dt { color: var(--muted); font-size: 11.5px; min-width: 52px; font-variant-numeric: tabular-nums; }
+  .milestones .dia { color: var(--mark); font-size: 10px; }
+
+  section.prose { margin: 30px 0 0; }
+  section.prose h2 { font-size: 15px; font-weight: 650; letter-spacing: -0.005em; margin: 0 0 10px; }
+  section.prose p { color: var(--ink-2); font-size: 13.5px; max-width: 76ch; margin: 0 0 10px; }
+  .arch {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 8px;
+    padding: 14px 16px; font: 12px/1.7 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: var(--ink-2); overflow-x: auto; white-space: pre; margin: 12px 0;
+  }
+  .arch b { color: var(--ink); font-weight: 600; }
+  ul.points { margin: 10px 0 0; padding-left: 0; }
+  ul.points li {
+    list-style: none; padding: 5px 0 5px 18px; position: relative;
+    color: var(--ink-2); font-size: 13.5px; max-width: 76ch;
+  }
+  ul.points li::before { content: ''; position: absolute; left: 2px; top: 12px; width: 7px; height: 7px; border-radius: 2px; background: var(--pos); }
+  ul.points b { color: var(--ink); font-weight: 600; }
+
+  .cards3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
+  .fcard { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 14px 15px; }
+  .fcard h3 { font-size: 13.5px; font-weight: 650; margin: 0 0 6px; letter-spacing: -0.005em; }
+  .fcard p { color: var(--ink-2); font-size: 12.5px; margin: 0; }
+  .fcard .tag { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; line-height: 1.65; max-width: 80ch; border-top: 1px solid var(--grid); padding-top: 16px; }
+  footer b { color: var(--ink-2); font-weight: 600; }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>arb-bot</h1>
+    <span class="badge"><span class="dot"></span>LIVE</span>
+    <span class="updated num" id="updated"></span>
+  </header>
+  <p class="sub">
+    An automated arbitrage system for esports series markets on Polymarket —
+    designed, built and operated by one person, trading real capital since April 2026.
+    Below: the settled, fee-net P&amp;L of every trade the bot has executed,
+    exported daily from the production ledger. Strategy internals are private;
+    the engineering is described further down.
+  </p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Cumulative settled P&amp;L<span class="lg">USD · ◆ = system milestone</span></h2>
+    <div class="chartbox">
+      <svg id="cum" viewBox="0 0 900 270" aria-label="Cumulative settled profit and loss over time with system milestones"></svg>
+      <div class="tip" id="cumTip"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Daily settled P&amp;L<span class="lg">gain in blue · loss in red</span></h2>
+    <div class="chartbox">
+      <svg id="daily" viewBox="0 0 900 190" aria-label="Daily settled profit and loss"></svg>
+      <div class="tip" id="dailyTip"></div>
+    </div>
+    <ul class="milestones" id="mlist"></ul>
+  </div>
+
+  <section class="prose">
+    <h2>What this is</h2>
+    <p>
+      Best-of-N esports series on Polymarket are priced across several related markets at
+      once — series winner, per-map winners, exact-score outcomes. Those prices are bound
+      by exact no-arbitrage identities. The bot maintains its own fair-value estimates,
+      detects when the identities are violated, and executes multi-leg hedged
+      constructions, including pure locks that profit regardless of the result.
+      Everything runs unattended on a single VPS: two exchange WebSocket pipelines, a
+      decision engine, risk controls, settlement, and a real-time operations dashboard.
+    </p>
+    <div class="arch"><b>adapters</b>   exchange WS/HTTP clients · DNS pinning · reconnect &amp; heartbeat discipline
+    ↓
+<b>platform</b>   order execution · market data · fees · fill bus · <b>on-chain settlement authority</b>
+    ↓
+<b>strategies</b> the private layer — pricing, signals, sizing (plugs into everything above)</div>
+    <ul class="points">
+      <li><b>Layer boundaries are enforced by a test</b> — strategy code cannot import
+        exchange internals; the dependency direction is checked in CI on every push.</li>
+      <li><b>Settlement trusts only on-chain resolution.</b> Game outcomes arrive from three
+        unreliable sources (a stats feed that reports technical wins for forfeited maps,
+        order books that pin at $0.50 on voids, and the chain). The settle layer fails
+        <i>unsettled</i>, never wrong.</li>
+      <li><b>Risk is layered:</b> per-match worst-case caps computed from live fills, a daily
+        circuit breaker, record-only caps on outlier signals, and post-only enforcement
+        where quoting is involved.</li>
+      <li><b>Every decision is auditable:</b> trace-correlated logs, a deduplicating issues
+        panel, and a per-trade post-hoc evaluation protocol that separates model edge
+        from execution luck and settlement variance.</li>
+      <li><b>674 automated tests</b> run green in ~9 seconds on every push; pricing output is
+        snapshot-locked so refactors cannot silently change trading behaviour.</li>
+    </ul>
+  </section>
+
+  <section class="prose">
+    <h2>Selected findings from operating it</h2>
+    <div class="cards3">
+      <div class="fcard">
+        <span class="tag">market microstructure</span>
+        <h3>A price that isn't a probability</h3>
+        <p>When a map is forfeited, its market pins at $0.50 — a settlement value, not a
+        belief. Any model that reads order books as probabilities silently ingests
+        poison. The fix reshaped how the whole system values evidence.</p>
+      </div>
+      <div class="fcard">
+        <span class="tag">information</span>
+        <h3>Markets in an information vacuum</h3>
+        <p>In minor-league matches no data provider covers, the only informed traders are
+        people watching the stream. We measured minutes-long windows where the finished
+        result traded at a discount — and learned when <i>not</i> to trade.</p>
+      </div>
+      <div class="fcard">
+        <span class="tag">evaluation</span>
+        <h3>Expected vs. realized, honestly</h3>
+        <p>Every fire is re-marked at the next inter-game lull, on hedged units only.
+        This separates "the model found real edge" from "the position got lucky" — and
+        the gap between the two is tracked as a first-class number.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <b>Methodology.</b> One point per calendar day (UTC), covering every settled trade the bot
+    executed; open positions are excluded until they settle. Figures are net of all exchange
+    fees. Milestones mark deployed changes to risk controls, execution or settlement — the
+    strategy iterates in production, and the curve shows it honestly. Data is exported
+    read-only from the live trading database; no manual adjustments, no backtests spliced in.
+    <br><br>
+    TypeScript · Node.js · SQLite · React — single operator. Not financial advice; past
+    performance is not indicative of future results.
+  </footer>
+</div>
+
+<script type="module">
+const DATA = await (await fetch('data.json')).json();
+const RAW_DAYS = DATA.days;
+const rows = RAW_DAYS.map(r => ({ ...r }));
+let cum = 0;
+for (const r of rows) { cum += r.p; r.c = cum; }
+const di = Object.fromEntries(rows.map((r, i) => [r.d, i]));
+const marks = MILESTONES.filter(m => m[0] in di).map(([d, label]) => ({ i: di[d], d, label }));
+
+const totalTrades = rows.reduce((s, r) => s + r.n, 0);
+const totalWins   = rows.reduce((s, r) => s + r.w, 0);
+const totalPnl    = rows[rows.length - 1].c;
+
+const fmt = v => (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+// ── stat tiles ──
+{
+  const wr = (100 * totalWins / totalTrades).toFixed(1);
+  const t = [
+    ['Cumulative P&L', fmt(totalPnl), totalPnl >= 0],
+    ['Settled trades', totalTrades.toLocaleString(), null],
+    ['Trade win rate', wr + '<small>%</small>', null],
+    ['Active days', String(rows.length), null],
+    ['Sports covered', '6', null],
+  ];
+  document.getElementById('tiles').innerHTML = t.map(([l, v, pos]) =>
+    `<div class="tile"><div class="label">${l}</div><div class="value num${pos ? ' pos' : ''}">${v}</div></div>`
+  ).join('');
+}
+
+// ── shared scaffolding ──
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+};
+const PAD = { l: 58, r: 12, t: 12, b: 26 };
+
+function niceTicks(min, max, count) {
+  const span = max - min, step0 = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= count) ?? mag * 10;
+  const ticks = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) ticks.push(v);
+  return ticks;
+}
+function frame(svg, W, H, ymin, ymax) {
+  svg.textContent = '';
+  const y = v => PAD.t + (ymax - v) / (ymax - ymin) * (H - PAD.t - PAD.b);
+  const x = i => PAD.l + i / (rows.length - 1) * (W - PAD.l - PAD.r);
+  for (const tv of niceTicks(ymin, ymax, 5)) {
+    svg.appendChild(el('line', { x1: PAD.l, x2: W - PAD.r, y1: y(tv), y2: y(tv),
+      stroke: tv === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+    const lab = el('text', { x: PAD.l - 8, y: y(tv) + 3.5, 'text-anchor': 'end',
+      fill: 'var(--muted)', 'font-size': 11, style: 'font-variant-numeric:tabular-nums' });
+    lab.textContent = fmt(tv);
+    svg.appendChild(lab);
+  }
+  const months = {};
+  rows.forEach((r, i) => { const m = r.d.slice(0, 7); if (!(m in months)) months[m] = i; });
+  for (const m in months) {
+    const lab = el('text', { x: x(months[m]), y: H - 7, fill: 'var(--muted)', 'font-size': 11 });
+    lab.textContent = new Date(m + '-15').toLocaleString('en-US', { month: 'short' });
+    svg.appendChild(lab);
+  }
+  return { x, y };
+}
+function bindTip(box, svg, tipEl, locate) {
+  svg.addEventListener('mousemove', ev => {
+    const r = svg.getBoundingClientRect();
+    const fx = (ev.clientX - r.left) / r.width * +svg.viewBox.baseVal.width;
+    const hit = locate(fx);
+    if (!hit) { tipEl.style.display = 'none'; return; }
+    tipEl.innerHTML = hit.html;
+    tipEl.style.display = 'block';
+    const bw = box.clientWidth;
+    let px = hit.px / +svg.viewBox.baseVal.width * r.width + 12;
+    if (px + tipEl.offsetWidth + 16 > bw) px -= tipEl.offsetWidth + 24;
+    tipEl.style.left = px + 'px';
+    tipEl.style.top = (hit.py / +svg.viewBox.baseVal.height * r.height - 8) + 'px';
+    svg.dispatchEvent(new CustomEvent('tipmove', { detail: hit.i }));
+  });
+  svg.addEventListener('mouseleave', () => {
+    tipEl.style.display = 'none';
+    svg.dispatchEvent(new CustomEvent('tipmove', { detail: -1 }));
+  });
+}
+
+// ── cumulative area + line + milestone diamonds ──
+{
+  const svg = document.getElementById('cum'), W = 900, H = 270;
+  const vals = rows.map(r => r.c);
+  const ymin = Math.min(0, ...vals) * 1.08, ymax = Math.max(...vals) * 1.1;
+  const { x, y } = frame(svg, W, H, ymin, ymax);
+  const pts = vals.map((v, i) => [x(i), y(v)]);
+  const dLine = 'M' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L');
+  svg.appendChild(el('path', { d: `${dLine}L${x(rows.length - 1)},${y(0)}L${x(0)},${y(0)}Z`,
+    fill: 'var(--pos-fill)', stroke: 'none' }));
+  svg.appendChild(el('path', { d: dLine, fill: 'none', stroke: 'var(--pos)',
+    'stroke-width': 2, 'stroke-linejoin': 'round' }));
+  for (const m of marks) {
+    svg.appendChild(el('line', { x1: x(m.i), x2: x(m.i), y1: PAD.t, y2: H - PAD.b,
+      stroke: 'var(--mark)', 'stroke-width': 1, 'stroke-dasharray': '2 4', opacity: 0.55 }));
+    svg.appendChild(el('path', {
+      d: `M${x(m.i)},${H - PAD.b - 5}l4.5,5l-4.5,5l-4.5,-5Z`,
+      fill: 'var(--mark)', stroke: 'var(--surface)', 'stroke-width': 1 }));
+  }
+  const end = pts[pts.length - 1];
+  svg.appendChild(el('circle', { cx: end[0], cy: end[1], r: 4, fill: 'var(--pos)',
+    stroke: 'var(--surface)', 'stroke-width': 2 }));
+  const cross = el('line', { y1: PAD.t, y2: H - PAD.b, stroke: 'var(--axis)',
+    'stroke-width': 1, 'stroke-dasharray': '3 3', visibility: 'hidden' });
+  svg.appendChild(cross);
+  const dot = el('circle', { r: 4, fill: 'var(--pos)', stroke: 'var(--surface)',
+    'stroke-width': 2, visibility: 'hidden' });
+  svg.appendChild(dot);
+  svg.addEventListener('tipmove', ev => {
+    const i = ev.detail;
+    if (i < 0) { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); return; }
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i));
+    dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(vals[i]));
+    cross.setAttribute('visibility', 'visible'); dot.setAttribute('visibility', 'visible');
+  });
+  bindTip(svg.parentElement, svg, document.getElementById('cumTip'), fx => {
+    const i = Math.max(0, Math.min(rows.length - 1,
+      Math.round((fx - PAD.l) / (W - PAD.l - PAD.r) * (rows.length - 1))));
+    const m = marks.find(mm => mm.i === i);
+    return { i, px: x(i), py: y(vals[i]),
+      html: `<div class="d">${rows[i].d}</div><div class="v num">${fmt(vals[i])}</div>`
+        + (m ? `<div class="m">◆ ${m.label}</div>` : '') };
+  });
+}
+
+// ── daily diverging bars ──
+{
+  const svg = document.getElementById('daily'), W = 900, H = 190;
+  const vals = rows.map(r => r.p);
+  const ymax = Math.max(...vals.map(Math.abs)) * 1.1;
+  const { x, y } = frame(svg, W, H, -ymax, ymax);
+  const bw = Math.max(2, (W - PAD.l - PAD.r) / rows.length - 2);
+  vals.forEach((v, i) => {
+    const h = Math.max(1, Math.abs(y(v) - y(0)));
+    svg.appendChild(el('rect', {
+      x: x(i) - bw / 2, y: v >= 0 ? y(v) : y(0), width: bw, height: h,
+      rx: 1.5, fill: v >= 0 ? 'var(--pos)' : 'var(--neg)',
+    }));
+  });
+  bindTip(svg.parentElement, svg, document.getElementById('dailyTip'), fx => {
+    const i = Math.max(0, Math.min(rows.length - 1,
+      Math.round((fx - PAD.l) / (W - PAD.l - PAD.r) * (rows.length - 1))));
+    const v = vals[i];
+    return { i, px: x(i), py: y(Math.max(0, v)),
+      html: `<div class="d">${rows[i].d} · ${rows[i].n} trades</div><div class="v num">${fmt(v)}</div>` };
+  });
+}
+
+// ── milestone changelog list ──
+document.getElementById('mlist').innerHTML = marks.map(m =>
+  `<li><span class="dia">◆</span><span class="dt num">${m.d.slice(5)}</span><span>${m.label}</span></li>`
+).join('');
+
+document.getElementById('updated').textContent =
+  'updated ' + rows[rows.length - 1].d + ' · daily export';
+</script>
+
+</body>
+</html>
