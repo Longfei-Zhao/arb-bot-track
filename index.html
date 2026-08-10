@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
 <title>arb-bot · live trading system</title>
 <style>
   :root {
@@ -241,8 +242,18 @@
 
 <script type="module">
 const DATA = await (await fetch('data.json')).json();
-const RAW_DAYS = DATA.days;
-const rows = RAW_DAYS.map(r => ({ ...r }));
+
+// System milestones — control/infra level only; strategy internals stay private.
+const MILESTONES = [
+  ['2026-06-12', 'Market-based game-state verification (guards against stats-feed desync)'],
+  ['2026-07-10', 'External: exchange raised taker fees 300 → 500 bps'],
+  ['2026-07-18', 'Serial hedge execution — eliminated the one-sided-fill leak'],
+  ['2026-07-19', 'Daily loss circuit breaker deployed'],
+  ['2026-07-24', 'Risk caps tightened; settlement hardened to on-chain resolution authority'],
+  ['2026-08-06', 'Fill accounting reconciled against on-chain history; leak class closed'],
+];
+
+const rows = DATA.days.map(r => ({ ...r }));
 let cum = 0;
 for (const r of rows) { cum += r.p; r.c = cum; }
 const di = Object.fromEntries(rows.map((r, i) => [r.d, i]));
