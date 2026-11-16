@@ -103,6 +103,12 @@
   }
   .milestones .dt { color: var(--muted); font-size: 11.5px; min-width: 52px; font-variant-numeric: tabular-nums; }
   .milestones .dia { color: var(--mark); font-size: 10px; }
+  h3.mh { font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; margin: 8px 2px 0; }
+  .milestones li.minor { color: var(--muted); }
+  details.minor { margin: 0; padding: 0 2px 8px; }
+  details.minor summary { cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; padding: 2px 0; }
+  details.minor summary:hover { color: var(--ink-2); }
+  details.minor .milestones { padding-bottom: 0; }
 
   section.prose { margin: 30px 0 0; }
   section.prose h2 { font-size: 15px; font-weight: 650; letter-spacing: -0.005em; margin: 0 0 10px; }
@@ -165,7 +171,7 @@
   <div class="tiles" id="tiles"></div>
 
   <div class="card">
-    <h2><span data-t="cumTitle">Cumulative settled P&amp;L</span><span class="lg" data-t="cumLegend">USD · ◆ = system milestone</span></h2>
+    <h2><span data-t="cumTitle">Cumulative settled P&amp;L</span><span class="lg" data-t="cumLegend">USD · ◆ major change · ◇ smaller change</span></h2>
     <div class="chartbox">
       <svg id="cum" viewBox="0 0 900 270" data-t-aria="cumAria" aria-label="Cumulative settled profit and loss over time with system milestones"></svg>
       <div class="tip" id="cumTip"></div>
@@ -178,7 +184,7 @@
       <svg id="daily" viewBox="0 0 900 190" data-t-aria="dailyAria" aria-label="Daily settled profit and loss"></svg>
       <div class="tip" id="dailyTip"></div>
     </div>
-    <ul class="milestones" id="mlist"></ul>
+    <div id="mlist"></div>
   </div>
 
   <section class="prose">
@@ -209,7 +215,7 @@ const T = {
     the engineering is described further down.`,
     tiles: ['Cumulative P&L', 'Settled trades', 'Trade win rate', 'Active days'],
     cumTitle: 'Cumulative settled P&amp;L',
-    cumLegend: 'USD · ◆ = system milestone',
+    cumLegend: 'USD · ◆ major change · ◇ smaller change',
     cumAria: 'Cumulative settled profit and loss over time with system milestones',
     dailyTitle: 'Daily settled P&amp;L',
     dailyLegend: 'gain in blue · loss in red',
@@ -238,24 +244,33 @@ const T = {
       `<b>Every decision is auditable:</b> trace-correlated logs, a deduplicating issues
         panel, and a per-trade post-hoc evaluation protocol that separates model edge
         from execution luck and settlement variance.`,
-      `<b>674 automated tests</b> run green in ~9 seconds on every push; pricing output is
+      `<b>1,328 automated tests</b> run green in ~10 seconds on every push; pricing output is
         snapshot-locked so refactors cannot silently change trading behaviour.`,
     ],
     footer: `<b>Methodology.</b> One point per calendar day (UTC), covering every settled trade the bot
     executed; open positions are excluded until they settle. Figures are net of all exchange
-    fees. Milestones mark deployed changes to risk controls, execution or settlement — the
+    fees. Milestones mark deployed changes to pricing, risk controls, execution or settlement — the
     strategy iterates in production, and the curve shows it honestly. Data is exported
     read-only from the live trading database; no manual adjustments, no backtests spliced in.
     <br><br>
     TypeScript · Node.js · SQLite · React — single operator. Not financial advice; past
     performance is not indicative of future results.`,
+    majorTitle: 'Major changes',
+    minorTitle: n => `Smaller changes (${n})`,
     milestones: {
+      '2026-06-04': 'Live: the strategy tracked on this page places its first trades',
       '2026-06-12': 'Data-integrity checks on outcome feeds',
-      '2026-07-10': 'External: exchange fee increase',
+      '2026-07-10': 'External: the exchange raised its fees',
+      '2026-07-16': 'Post-trade audit: every trade is re-valued after its event, to separate edge from luck',
       '2026-07-18': 'Execution change: order sequencing',
-      '2026-07-19': 'Daily loss circuit breaker deployed',
-      '2026-07-24': 'Risk caps tightened; settlement hardened to on-chain resolution authority',
+      '2026-07-19': 'Daily loss circuit breaker',
+      '2026-07-24': 'Settlement rebuilt on on-chain resolution as the only authority; risk caps tightened',
       '2026-08-06': 'Fill accounting reconciled against on-chain history; leak class closed',
+      '2026-11-05': 'Pricing rebuilt: a learned model (a small Transformer) now estimates fair value, in place of hand-written rules',
+      '2026-11-10': 'Execution made event-driven: decisions follow each order-book update instead of a timer',
+      '2026-11-11': 'Trade structure changed: single positions instead of hedged pairs',
+      '2026-11-14': 'External: the exchange changed its settlement rules; the system was updated ahead of the change',
+      '2026-11-16': 'Exposure management: the entry requirement scales with the position already held; per-event loss limit enforced exactly',
     },
   },
   zh: {
@@ -266,7 +281,7 @@ const T = {
     每天从生产账本导出。策略细节不公开，工程部分在下文介绍。`,
     tiles: ['累计盈亏', '已结算交易', '交易胜率', '交易天数'],
     cumTitle: '累计已结算盈亏',
-    cumLegend: '美元 · ◆ = 系统里程碑',
+    cumLegend: '美元 · ◆ 重大改动 · ◇ 一般改动',
     cumAria: '累计已结算盈亏随时间的变化，标注系统里程碑',
     dailyTitle: '每日已结算盈亏',
     dailyLegend: '蓝色为盈利 · 红色为亏损',
@@ -289,20 +304,29 @@ const T = {
       `<b>风控分多层：</b>根据实时成交计算的单个仓位最坏情况上限、每日亏损熔断、对异常信号只记录不下单。`,
       `<b>每个决策都可审计：</b>带追踪关联的日志、自动去重的问题面板，以及逐笔交易的事后评估流程，
         把模型优势、执行运气和结算波动分开来看。`,
-      `<b>674 个自动化测试</b>在每次推送时约 9 秒跑完；定价输出用快照锁定，重构不会悄悄改变交易行为。`,
+      `<b>1,328 个自动化测试</b>在每次推送时约 10 秒跑完；定价输出用快照锁定，重构不会悄悄改变交易行为。`,
     ],
     footer: `<b>方法说明。</b>每个自然日（UTC）一个点，包含机器人执行并已结算的全部交易；
-    未结算的持仓在结算前不计入。所有数字均已扣除交易所手续费。里程碑标记的是风控、执行或结算方面上线的改动：
+    未结算的持仓在结算前不计入。所有数字均已扣除交易所手续费。里程碑标记的是定价、风控、执行或结算方面上线的改动：
     策略在生产环境中持续迭代，曲线如实反映这一点。数据从实盘数据库只读导出，没有人工调整，也没有拼接回测结果。
     <br><br>
     TypeScript · Node.js · SQLite · React，一人开发运维。不构成投资建议；过往表现不代表未来收益。`,
+    majorTitle: '重大改动',
+    minorTitle: n => `一般改动（${n} 项）`,
     milestones: {
+      '2026-06-04': '上线：本页跟踪的这套策略完成第一批实盘交易',
       '2026-06-12': '结果数据源的一致性校验',
       '2026-07-10': '外部变化：交易所提高手续费',
+      '2026-07-16': '事后审计：每笔交易在事件结束后重新估值，把优势和运气分开',
       '2026-07-18': '执行改动：调整下单顺序',
       '2026-07-19': '上线每日亏损熔断',
-      '2026-07-24': '收紧风控上限；结算改为以链上结果为准',
+      '2026-07-24': '结算重做：只以链上结果为准；同时收紧风控上限',
       '2026-08-06': '成交记账与链上历史完成对账，这类漏洞全部修复',
+      '2026-11-05': '定价重做：由学习得到的模型（小型 Transformer）估计公允价格，取代手写规则',
+      '2026-11-10': '执行改为事件驱动：每次盘口变化都会触发决策，不再按固定间隔扫描',
+      '2026-11-11': '交易结构改变：由成对对冲改为只持有单边仓位',
+      '2026-11-14': '外部变化：交易所调整结算规则，系统提前完成适配',
+      '2026-11-16': '敞口管理：入场要求随已有持仓调整；单场亏损上限严格执行',
     },
   },
 };
@@ -319,8 +343,10 @@ const rows = DATA.days.map(r => ({ ...r }));
 let cum = 0;
 for (const r of rows) { cum += r.p; r.c = cum; }
 const di = Object.fromEntries(rows.map((r, i) => [r.d, i]));
-// System milestones — control/infra level only; strategy internals stay private.
-const marks = Object.keys(T.en.milestones).filter(d => d in di).map(d => ({ i: di[d], d }));
+// System milestones say what changed, never how; strategy internals stay private.
+// MAJOR = the ones that reshaped pricing, trade structure, settlement or costs.
+const MAJOR = new Set(['2026-06-04', '2026-07-10', '2026-07-24', '2026-11-05', '2026-11-11']);
+const marks = Object.keys(T.en.milestones).filter(d => d in di).map(d => ({ i: di[d], d, major: MAJOR.has(d) }));
 
 const totalTrades = rows.reduce((s, r) => s + r.n, 0);
 const totalWins   = rows.reduce((s, r) => s + r.w, 0);
@@ -401,11 +427,16 @@ function bindTip(box, svg, tipEl, locate) {
     fill: 'var(--pos-fill)', stroke: 'none' }));
   svg.appendChild(el('path', { d: dLine, fill: 'none', stroke: 'var(--pos)',
     'stroke-width': 2, 'stroke-linejoin': 'round' }));
-  for (const m of marks) {
+  for (const m of marks.filter(mm => !mm.major)) {
+    svg.appendChild(el('path', {
+      d: `M${x(m.i)},${H - PAD.b - 3.5}l3.5,3.5l-3.5,3.5l-3.5,-3.5Z`,
+      fill: 'var(--surface)', stroke: 'var(--mark)', 'stroke-width': 1.2 }));
+  }
+  for (const m of marks.filter(mm => mm.major)) {
     svg.appendChild(el('line', { x1: x(m.i), x2: x(m.i), y1: PAD.t, y2: H - PAD.b,
       stroke: 'var(--mark)', 'stroke-width': 1, 'stroke-dasharray': '2 4', opacity: 0.55 }));
     svg.appendChild(el('path', {
-      d: `M${x(m.i)},${H - PAD.b - 5}l4.5,5l-4.5,5l-4.5,-5Z`,
+      d: `M${x(m.i)},${H - PAD.b - 5.5}l5,5.5l-5,5.5l-5,-5.5Z`,
       fill: 'var(--mark)', stroke: 'var(--surface)', 'stroke-width': 1 }));
   }
   const end = pts[pts.length - 1];
@@ -430,7 +461,7 @@ function bindTip(box, svg, tipEl, locate) {
     const m = marks.find(mm => mm.i === i);
     return { i, px: x(i), py: y(vals[i]),
       html: `<div class="d">${rows[i].d}</div><div class="v num">${fmt(vals[i])}</div>`
-        + (m ? `<div class="m">◆ ${L().milestones[m.d]}</div>` : '') };
+        + (m ? `<div class="m">${m.major ? '◆' : '◇'} ${L().milestones[m.d]}</div>` : '') };
   });
 }
 
@@ -482,9 +513,13 @@ function applyLang() {
     `<div class="tile"><div class="label">${t.tiles[k]}</div><div class="value num${pos ? ' pos' : ''}">${v}</div></div>`
   ).join('');
 
-  document.getElementById('mlist').innerHTML = marks.map(m =>
-    `<li><span class="dia">◆</span><span class="dt num">${m.d.slice(5)}</span><span>${t.milestones[m.d]}</span></li>`
-  ).join('');
+  const item = m => `<li${m.major ? '' : ' class="minor"'}><span class="dia">${m.major ? '◆' : '◇'}</span>`
+    + `<span class="dt num">${m.d.slice(5)}</span><span>${t.milestones[m.d]}</span></li>`;
+  const major = marks.filter(m => m.major), minor = marks.filter(m => !m.major);
+  document.getElementById('mlist').innerHTML =
+    `<h3 class="mh">${t.majorTitle}</h3><ul class="milestones">${major.map(item).join('')}</ul>`
+    + (minor.length ? `<details class="minor"><summary>${t.minorTitle(minor.length)}</summary>`
+      + `<ul class="milestones">${minor.map(item).join('')}</ul></details>` : '');
 
   document.getElementById('updated').textContent = t.updated(rows[rows.length - 1].d);
 }
